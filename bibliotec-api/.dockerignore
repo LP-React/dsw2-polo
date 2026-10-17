@@ -1,0 +1,6 @@
+target
+eureka-server
+.git
+.settings
+.vscode
+*.log

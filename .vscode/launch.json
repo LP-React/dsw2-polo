@@ -1,0 +1,33 @@
+{
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Backend BIBLIO-TEC",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/bibliotec-api",
+            "mainClass": "com.bibliotec.BibliotecApplication",
+            "projectName": "bibliotec",
+            "args": "",
+            "envFile": "${workspaceFolder}/bibliotec-api/.env"
+        },
+        {
+            "type": "java",
+            "name": "Servidor Eureka",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/eureka-server",
+            "mainClass": "com.bibliotec.eureka.EurekaServerApplication",
+            "projectName": "eureka-server",
+            "args": ""
+        }
+    ],
+    "compounds": [
+        {
+            "name": "BIBLIO-TEC completo (Eureka + Backend)",
+            "configurations": [
+                "Servidor Eureka",
+                "Backend BIBLIO-TEC"
+            ],
+            "stopAll": true
+        }
+    ]
+}

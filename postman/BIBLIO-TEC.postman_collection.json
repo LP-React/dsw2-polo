@@ -1,0 +1,661 @@
+{
+  "info": {
+    "_postman_id": "8d38e368-3dda-4b59-97dc-b1b1107ec001",
+    "name": "BIBLIO-TEC - Flujos completos",
+    "description": "Ejecutar las carpetas en orden. La colección crea sus propios datos y guarda automáticamente categoriaId, libroId, prestamoId y usuarioGestionId. Requisito: backend disponible en http://localhost:8080. El chat WebSocket se prueba manualmente conectando a ws://localhost:8080/chat-websocket, suscribiéndose a /topic/chat y enviando a /app/chat.enviar.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "adminUsername", "value": "admin" },
+    { "key": "adminPassword", "value": "Admin12345" },
+    { "key": "userUsername", "value": "" },
+    { "key": "userPassword", "value": "Clave12345" },
+    { "key": "categoriaId", "value": "" },
+    { "key": "libroId", "value": "" },
+    { "key": "prestamoId", "value": "" },
+    { "key": "prestamoRechazadoId", "value": "" },
+    { "key": "usuarioGestionId", "value": "" },
+    { "key": "usuarioGestionUsername", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "00 - Autenticación inicial",
+      "description": "Verifica el administrador y los errores de autenticación.",
+      "item": [
+        {
+          "name": "1. Login administrador",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{adminUsername}}", "type": "string" },
+                { "key": "password", "value": "{{adminPassword}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "Valida las credenciales del administrador inicial."
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Login correcto', () => pm.response.to.have.status(200));",
+              "pm.test('Tiene rol ADMIN', () => pm.expect(pm.response.json().rol).to.eql('ADMIN'));"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "2. Login incorrecto devuelve 401",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{adminUsername}}", "type": "string" },
+                { "key": "password", "value": "incorrecta", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Rechaza credenciales incorrectas', () => pm.response.to.have.status(401));",
+              "pm.test('Devuelve error JSON', () => pm.expect(pm.response.json().mensaje).to.exist);"
+            ], "type": "text/javascript" }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "01 - Administrador prepara catálogo",
+      "description": "Crea una categoría y un libro, guardando sus IDs.",
+      "item": [
+        {
+          "name": "1. Crear categoría",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{adminUsername}}", "type": "string" },
+                { "key": "password", "value": "{{adminPassword}}", "type": "string" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Tecnología {{$timestamp}}\",\n  \"descripcion\": \"Libros de programación\",\n  \"estado\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/categorias"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Categoría creada', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set('categoriaId', data.idCategoria);",
+              "pm.test('Se guardó categoriaId', () => pm.expect(data.idCategoria).to.exist);"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "2. Crear libro con una unidad",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{adminUsername}}", "type": "string" },
+                { "key": "password", "value": "{{adminPassword}}", "type": "string" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Spring Boot Básico {{$timestamp}}\",\n  \"autor\": \"Ana Pérez\",\n  \"isbn\": \"ISBN-{{$timestamp}}\",\n  \"anioPublicacion\": 2026,\n  \"cantidad\": 1,\n  \"estado\": true,\n  \"categoria\": { \"idCategoria\": {{categoriaId}} }\n}"
+            },
+            "url": "{{baseUrl}}/api/libros"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Libro creado', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set('libroId', data.idLibro);",
+              "pm.test('Stock inicial igual a 1', () => pm.expect(data.cantidad).to.eql(1));"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "3. Consultar libro creado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{adminUsername}}", "type": "string" },
+                { "key": "password", "value": "{{adminPassword}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/libros/{{libroId}}"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Libro encontrado', () => pm.response.to.have.status(200));"
+            ], "type": "text/javascript" }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "02 - Registro y acciones del lector",
+      "description": "Registra un lector único, inicia sesión, busca el libro y solicita el préstamo.",
+      "item": [
+        {
+          "name": "1. Registrar lector",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "exec": [
+                "pm.collectionVariables.set('userUsername', 'lector' + Date.now());"
+              ], "type": "text/javascript" }
+            },
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "pm.test('Usuario registrado', () => pm.response.to.have.status(201));",
+                "const data = pm.response.json();",
+                "pm.test('Rol USER asignado', () => pm.expect(data.rol).to.eql('USER'));",
+                "pm.test('No expone password', () => pm.expect(pm.response.text()).not.to.include('Clave12345'));"
+              ], "type": "text/javascript" }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "noauth" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Lector de prueba\",\n  \"username\": \"{{userUsername}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/usuarios/registro"
+          }
+        },
+        {
+          "name": "2. Login lector",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{userUsername}}", "type": "string" },
+                { "key": "password", "value": "{{userPassword}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Login de lector correcto', () => pm.response.to.have.status(200));",
+              "pm.test('Usuario coincide', () => pm.expect(pm.response.json().username).to.eql(pm.collectionVariables.get('userUsername')));"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "3. Buscar por título, autor y categoría",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{userUsername}}", "type": "string" },
+                { "key": "password", "value": "{{userPassword}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/libros?titulo=Spring&autor=Pérez&categoria=Tecnología"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Búsqueda correcta', () => pm.response.to.have.status(200));",
+              "pm.test('Encuentra al menos un libro', () => pm.expect(pm.response.json().length).to.be.above(0));"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "4. Lector no puede crear libros",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{userUsername}}", "type": "string" },
+                { "key": "password", "value": "{{userPassword}}", "type": "string" }
+              ]
+            },
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{baseUrl}}/api/libros"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Permiso denegado', () => pm.response.to.have.status(403));"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "5. Solicitar préstamo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{userUsername}}", "type": "string" },
+                { "key": "password", "value": "{{userPassword}}", "type": "string" }
+              ]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"idLibro\": {{libroId}}\n}" },
+            "url": "{{baseUrl}}/api/prestamos"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Solicitud creada', () => pm.response.to.have.status(201));",
+              "const data = pm.response.json();",
+              "pm.collectionVariables.set('prestamoId', data.idPrestamo);",
+              "pm.test('Queda pendiente', () => pm.expect(data.estado).to.eql('PENDIENTE'));"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "6. Evitar solicitud duplicada",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{userUsername}}", "type": "string" },
+                { "key": "password", "value": "{{userPassword}}", "type": "string" }
+              ]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"idLibro\": {{libroId}}\n}" },
+            "url": "{{baseUrl}}/api/prestamos"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Duplicado rechazado', () => pm.response.to.have.status(409));"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "7. Consultar mis préstamos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{userUsername}}", "type": "string" },
+                { "key": "password", "value": "{{userPassword}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/prestamos/mis-prestamos"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Historial disponible', () => pm.response.to.have.status(200));"
+            ], "type": "text/javascript" }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "03 - Administrador aprueba el préstamo",
+      "item": [
+        {
+          "name": "1. Listar todas las solicitudes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{adminUsername}}", "type": "string" },
+                { "key": "password", "value": "{{adminPassword}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/prestamos"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Listado administrativo disponible', () => pm.response.to.have.status(200));"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "2. Aprobar préstamo",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{adminUsername}}", "type": "string" },
+                { "key": "password", "value": "{{adminPassword}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/prestamos/{{prestamoId}}/aprobar"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Préstamo aprobado', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.test('Estado PRESTADO', () => pm.expect(data.estado).to.eql('PRESTADO'));",
+              "pm.test('Tiene fecha de vencimiento', () => pm.expect(data.fechaVencimiento).to.exist);"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "3. Verificar stock descontado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{adminUsername}}", "type": "string" },
+                { "key": "password", "value": "{{adminPassword}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/libros/{{libroId}}"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Stock quedó en cero', () => pm.expect(pm.response.json().cantidad).to.eql(0));"
+            ], "type": "text/javascript" }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "04 - Lector devuelve el libro",
+      "item": [
+        {
+          "name": "1. Devolver préstamo",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{userUsername}}", "type": "string" },
+                { "key": "password", "value": "{{userPassword}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/prestamos/{{prestamoId}}/devolver"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Devolución registrada', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.test('Estado DEVUELTO', () => pm.expect(data.estado).to.eql('DEVUELTO'));",
+              "pm.test('Tiene fecha de devolución', () => pm.expect(data.fechaDevolucion).to.exist);"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "2. Verificar stock repuesto",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{userUsername}}", "type": "string" },
+                { "key": "password", "value": "{{userPassword}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/libros/{{libroId}}"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Stock volvió a uno', () => pm.expect(pm.response.json().cantidad).to.eql(1));"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "3. Evitar devolución duplicada",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{userUsername}}", "type": "string" },
+                { "key": "password", "value": "{{userPassword}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/prestamos/{{prestamoId}}/devolver"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Segunda devolución rechazada', () => pm.response.to.have.status(409));"
+            ], "type": "text/javascript" }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "05 - Flujo alternativo de rechazo",
+      "item": [
+        {
+          "name": "1. Crear otra solicitud",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{userUsername}}", "type": "string" },
+                { "key": "password", "value": "{{userPassword}}", "type": "string" }
+              ]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"idLibro\": {{libroId}}\n}" },
+            "url": "{{baseUrl}}/api/prestamos"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Segunda solicitud creada', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('prestamoRechazadoId', pm.response.json().idPrestamo);"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "2. Administrador rechaza solicitud",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{adminUsername}}", "type": "string" },
+                { "key": "password", "value": "{{adminPassword}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/prestamos/{{prestamoRechazadoId}}/rechazar"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Solicitud rechazada', () => pm.response.to.have.status(200));",
+              "pm.test('Estado RECHAZADO', () => pm.expect(pm.response.json().estado).to.eql('RECHAZADO'));"
+            ], "type": "text/javascript" }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "06 - Administración de usuarios",
+      "item": [
+        {
+          "name": "1. Registrar usuario temporal",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "exec": [
+                "pm.collectionVariables.set('usuarioGestionUsername', 'gestion' + Date.now());"
+              ], "type": "text/javascript" }
+            },
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "pm.test('Usuario temporal creado', () => pm.response.to.have.status(201));",
+                "pm.collectionVariables.set('usuarioGestionId', pm.response.json().idUsuario);"
+              ], "type": "text/javascript" }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "noauth" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Usuario temporal\",\n  \"username\": \"{{usuarioGestionUsername}}\",\n  \"password\": \"Clave12345\"\n}"
+            },
+            "url": "{{baseUrl}}/api/usuarios/registro"
+          }
+        },
+        {
+          "name": "2. Listar usuarios",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{adminUsername}}", "type": "string" },
+                { "key": "password", "value": "{{adminPassword}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/usuarios"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Listado obtenido', () => pm.response.to.have.status(200));"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "3. Actualizar rol y nombre",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{adminUsername}}", "type": "string" },
+                { "key": "password", "value": "{{adminPassword}}", "type": "string" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Usuario actualizado\",\n  \"estado\": true,\n  \"rol\": \"ADMIN\"\n}"
+            },
+            "url": "{{baseUrl}}/api/usuarios/{{usuarioGestionId}}"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Usuario actualizado', () => pm.response.to.have.status(200));",
+              "pm.test('Rol actualizado', () => pm.expect(pm.response.json().rol).to.eql('ADMIN'));"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "4. Eliminar usuario sin préstamos",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{adminUsername}}", "type": "string" },
+                { "key": "password", "value": "{{adminPassword}}", "type": "string" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/usuarios/{{usuarioGestionId}}"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Usuario eliminado', () => pm.response.to.have.status(204));"
+            ], "type": "text/javascript" }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "07 - SOAP disponibilidad",
+      "item": [
+        {
+          "name": "1. Obtener WSDL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": { "type": "noauth" },
+            "url": "{{baseUrl}}/soap/libros.wsdl"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('WSDL publicado', () => pm.response.to.have.status(200));",
+              "pm.test('Contiene la operación', () => pm.expect(pm.response.text()).to.include('consultarDisponibilidad'));"
+            ], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "2. Consultar disponibilidad SOAP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "text/xml;charset=UTF-8" }],
+            "auth": { "type": "noauth" },
+            "body": {
+              "mode": "raw",
+              "raw": "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:lib=\"http://bibliotec.com/soap/libros\">\n  <soapenv:Header/>\n  <soapenv:Body>\n    <lib:consultarDisponibilidadRequest>\n      <lib:idLibro>{{libroId}}</lib:idLibro>\n    </lib:consultarDisponibilidadRequest>\n  </soapenv:Body>\n</soapenv:Envelope>"
+            },
+            "url": "{{baseUrl}}/soap"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('SOAP responde correctamente', () => pm.response.to.have.status(200));",
+              "pm.test('Incluye disponibilidad', () => pm.expect(pm.response.text()).to.include('disponible'));"
+            ], "type": "text/javascript" }
+          }]
+        }
+      ]
+    }
+  ]
+}
